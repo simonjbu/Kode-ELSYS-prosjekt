@@ -1,44 +1,52 @@
 #include <WiFi.h>
 #include <ESP32Servo.h>
+#include <Wire.h>
+#include <MPU6050.h>
 
 // Wi-Fi credentials
-const char* ssid = "your_SSID";        // Replace with your network SSID (name)
-const char* password = "your_PASSWORD"; // Replace with your network password
+const char* ssid = "your_SSID";        // Byttes ut med nettverkets SSID
+const char* password = "your_PASSWORD"; // Byttes ut med ordentlig passord
 
-WiFiServer server(80); // Create a server that listens on port 80
+WiFiServer server(80); 
 
-// Define GPIO pins for specific actions (Replace with your actual pin numbers)
 const int upActionPin = 13;
-const int downActionPin = 12;   //********må endres ut ifra servomotoren!!
-const int leftActionPin = 14;   // *******left og right kan muligens fjernes, kobles opp til samme servomotor
-const int rightActionPin = 27; 
+const int downActionPin = 12; 
+const int turnActionPin = 27;  
 
+const int turnAngle = 180;
 
 // Definer pinnen og variabler for PWM
-const int servoPin = 22;         // ******PWM-utgangspinn for servo. ENDRES
-int current_turn_state = 90;
+const int servoPin = 22;         // PWM-utgangspinn for servo.
+int current_turn_state = 90;     // Setter roret i nøytral posisjon. Dette må endres med testing
 
 Servo servo;
+MPU6050 gyrosensor;
 
 void setup() {
-  // Initialize serial communication
+  // Initialser kommunikasjon
   Serial.begin(115200);
 
   servo.attach(servoPin);
   servo.write(current_turn_state); //setter servoen i nøytral posisjon
-  // Initialize GPIO pins
+
   pinMode(upActionPin, OUTPUT);
   pinMode(downActionPin, OUTPUT);
-  pinMode(leftActionPin, OUTPUT);
-  pinMode(rightActionPin, OUTPUT);
+  pinMode(turnActionPin, OUTPUT);
 
-  // Set initial states to LOW
   digitalWrite(upActionPin, LOW);
   digitalWrite(downActionPin, LOW);
-  digitalWrite(leftActionPin, LOW);
-  digitalWrite(rightActionPin, LOW);
+  digitalWrite(turnActionPin, LOW);
 
-  // Connect to Wi-Fi
+  // Initialiser gyro-sensor MPU6050
+  Wire.begin();
+  gyrosensor.initialize();
+  if (!gyrosensor.testConnection()) {
+    Serial.println("MPU6050 tilkobling feilet");
+    while (1);  // Stopp hvis gyrosensoren ikke fungerer
+  }
+
+
+  // Koble til Wi-Fi
   Serial.println("Connecting to Wi-Fi...");
   WiFi.begin(ssid, password);
 
@@ -51,39 +59,78 @@ void setup() {
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
 
-  // Start the server
+  // Start serveren
   server.begin();
 }
 
 
+// Funksjon for å utføre 180-graders rotasjon
+void snuBat180Grader() {
+    float aktuellVinkel = 0.0;  // Startvinkel
+    unsigned long forrigeTid = millis();  // Starttid for integrasjon
+
+    // Les første rotasjonshastighet (for trapesintegrasjon)
+    int16_t gyroX, gyroY, gyroZ;
+    gyrosensor.getRotation(&gyroX, &gyroY, &gyroZ);
+    float forrigeVinkelHastighetZ = gyroZ / 131.0;  // Skaleringsfaktor for MPU6050
+
+    // Start rotasjonen
+    servo.write(20);            // Sett roret til høyre (juster verdi etter behov)
+    digitalWrite(upActionPin, HIGH);
+
+    // Kontinuerlig oppdatering av gyrosensor for å måle rotasjonen
+    while (abs(aktuellVinkel) < turnAngle) {
+        unsigned long nåværendeTid = millis();
+        float tidsDifferanse = (nåværendeTid - forrigeTid) / 1000.0;  // Delta-t i sekunder
+        forrigeTid = nåværendeTid;
+  
+        // Konverter gyroskopdata til vinkelhastighet i grader/sekund og integrer
+        gyrosensor.getRotation(&gyroX, &gyroY, &gyroZ);
+        float aktuellVinkelHastighetZ = gyroZ / 131.0;  // Skaleringsfaktor for MPU6050
+        
+        // Bruk trapesintegrasjon for å oppdatere total rotasjon
+        float snittVinkelHastighetZ = (forrigeVinkelHastighetZ + aktuellVinkelHastighetZ) / 2.0;
+        aktuellVinkel += snittVinkelHastighetZ * tidsDifferanse;
+        forrigeVinkelHastighetZ = aktuellVinkelHastighetZ;
+
+        Serial.print("Vinkel: ");
+        Serial.println(aktuellVinkel);
+
+        delay(10);  // Kort pause for å unngå for rask oppdatering
+    }
+
+    // Stopp DC-motoren og sett roret tilbake til nøytral posisjon
+    digitalWrite(upActionPin, LOW);
+    servo.write(90);             // Sett roret til midtstilling
+}
+
 
 void loop() {
-  // Check if a client has connected
   WiFiClient client = server.available();
 
   if (client) {
     Serial.println("Client connected.");
     
-    String currentLine = ""; // To store incoming data
+    String currentLine = ""; // For å lagre innkommende data
     while (client.connected()) {
       if (client.available()) {
-        char c = client.read(); // Read incoming data from client
+        char c = client.read(); //
         if (c == '\n') {
-          // Trim the incoming command to remove extra spaces
+          // Fjern mellomrom
           currentLine.trim(); 
-          // Process the data
           Serial.println("Received: " + currentLine);
 
-          // Perform actions based on received command
+
+          // Handle basert på hvilke signal som mottas fra PCen
           if (currentLine == "UP") {
             Serial.println("Performing UP action");
-            digitalWrite(upActionPin, HIGH);  // Here comes your code for UP action
-            delay(100);                       // Simulate an action duration
+            digitalWrite(upActionPin, HIGH); 
+            delay(100);                   
             digitalWrite(upActionPin, LOW);
           }
           else if (currentLine == "DOWN") {
             Serial.println("Performing DOWN action");
-            digitalWrite(downActionPin, HIGH); // Here comes your code for DOWN action
+            digitalWrite(downActionPin, HIGH); 
             delay(100);
             digitalWrite(downActionPin, LOW);
           }
@@ -96,7 +143,7 @@ void loop() {
           }
           else if (currentLine == "RIGHT") {
             current_turn_state -= 10;
-            if (current_turn_state < 0) current_turn_state = 0;      // Limiting min angle
+            if (current_turn_state < 0) current_turn_state = 0;    
             servo.write(current_turn_state);
             Serial.println("Turning RIGHT: " + String(current_turn_state));
             delay(100);
@@ -105,24 +152,28 @@ void loop() {
             Serial.println("ESC key pressed - stopping all actions.");
             // Perform any ESC action if needed, like resetting the states.
           }
+          
           else if (currentLine == "HJEM") {
-            Serial.println("Performing HJEM - Turning around");        // Snu 180 grader. Enten vha prøv-feil eller sensor 
-            servo.write(70);
-            delay(1000);
-            digitalWrite(upActionPin, HIGH);
-            delay(2000);                                               // Hvor lenge den må kjøre for å snu helt rundt
-            digitalWrite(upActionPin, LOW);  
-            servo.write(90);                   
+            Serial.println("Performing HJEM - Turning around");       
+            snuBat180Grader();                                        
+            // Snu 180 grader. Enten vha gyro-sensor eller en gjetning på hvor lenge den skal snu. 
+            // Hvis vi ikke får gyrosensoren til å fungere, utføres den kommenterte koden.
+            // servo.write(20);                                       
+            // delay(1000);
+            // digitalWrite(upActionPin, HIGH);
+            // delay(2000);                                      
+            // digitalWrite(upActionPin, LOW);  
+            // servo.write(90);                   
           }
 
-          // Clear the currentLine after processing
+          
           currentLine = "";
         } else if (c != '\r') {
-          currentLine += c; // Add character to the line
+          currentLine += c;
         }
       }
     }
-    // Close the connection
+  
     client.stop();
     Serial.println("Client disconnected.");
   }
