@@ -2,8 +2,8 @@ import socket
 import keyboard
 import time
 
-# ESP32 IP-adresse (erstatt med din ESP32 sin IP-adresse)
-ESP32_IP = "192.168.1.x"  # Replace with your ESP32 IP address
+# ESP32 IP-adresse
+ESP32_IP = "192.168.137.91" 
 ESP32_PORT = 80
 
 def send_key_to_esp32(key):
@@ -14,7 +14,6 @@ def send_key_to_esp32(key):
     except Exception as e:
         print(f"Failed to send {key}: {e}")
 
-# Mapping of arrow keys to commands
 key_mapping = {
     'up': "UP",
     'down': "DOWN",
@@ -47,7 +46,7 @@ while True:
             send_key_to_esp32(key_mapping['right'])
             print("Sent: RIGHT")
             har_kjort.insert(0, 'left')
-            time.sleep(0.1)                                 # Legger inn at jeg har kjørt left, right for right, left fordi 
+            time.sleep(0.1)                                 # Legger inn at båten har kjørt left, right for right, left fordi 
         if keyboard.is_pressed('esc'):                      # når den kjører tilbake må den kjøre speilvendt.
             send_key_to_esp32(key_mapping['esc'])
             print("Sent: ESC")
