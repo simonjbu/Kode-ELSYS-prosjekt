@@ -4,13 +4,14 @@
 #include <MPU6050.h>
 
 // Wi-Fi credentials
-const char* ssid = "your_SSID";        // Byttes ut med nettverkets SSID
-const char* password = "your_PASSWORD"; // Byttes ut med ordentlig passord
+const char* ssid = "SIMONPC";        // Byttes ut med nettverkets SSID
+const char* password = "12345678"; // Byttes ut med ordentlig passord
 
+serial.print
 WiFiServer server(80); 
 
-const int upActionPin = 13;
-const int downActionPin = 12; 
+const int upActionPin = 12;
+const int downActionPin = 14; 
 const int turnActionPin = 27;  
 
 const int turnAngle = 180;
@@ -155,15 +156,15 @@ void loop() {
           
           else if (currentLine == "HJEM") {
             Serial.println("Performing HJEM - Turning around");       
-            snuBat180Grader();                                        
+            // snuBat180Grader();                                        
             // Snu 180 grader. Enten vha gyro-sensor eller en gjetning på hvor lenge den skal snu. 
             // Hvis vi ikke får gyrosensoren til å fungere, utføres den kommenterte koden.
-            // servo.write(20);                                       
-            // delay(1000);
-            // digitalWrite(upActionPin, HIGH);
-            // delay(2000);                                      
-            // digitalWrite(upActionPin, LOW);  
-            // servo.write(90);                   
+            servo.write(20);                                       
+            delay(1000);
+            digitalWrite(upActionPin, HIGH);
+            delay(2000);                                      
+            digitalWrite(upActionPin, LOW);  
+            servo.write(90);                   
           }
 
           
